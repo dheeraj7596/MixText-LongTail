@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as Data
-from pytorch_transformers import *
+from transformers import *
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
@@ -17,7 +17,7 @@ from normal_bert import ClassificationBert
 
 parser = argparse.ArgumentParser(description='PyTorch Base Models')
 
-parser.add_argument('--epochs', default=50, type=int, metavar='N',
+parser.add_argument('--epochs', default=2, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--batch-size', default=4, type=int, metavar='N',
                     help='train batchsize')
@@ -34,7 +34,7 @@ parser.add_argument('--gpu', default='0,1,2,3', type=str,
 
 parser.add_argument('--n-labeled', type=int, default=20,
                     help='Number of labeled data')
-parser.add_argument('--val-iteration', type=int, default=200,
+parser.add_argument('--val-iteration', type=int, default=5,
                     help='Number of labeled data')
 
 
@@ -47,7 +47,7 @@ parser.add_argument('--train_aug', default=False, type=bool, metavar='N',
 parser.add_argument('--model', type=str, default='bert-base-uncased',
                     help='pretrained model')
 
-parser.add_argument('--data-path', type=str, default='yahoo_answers_csv/',
+parser.add_argument('--data-path', type=str, default='/Users/pushkar_bhuse/MixText/MixText-LongTail/data/yahoo_answers_csv/',
                     help='path to data folders')
 
 
@@ -70,12 +70,13 @@ def main():
     labeled_trainloader = Data.DataLoader(
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
     val_loader = Data.DataLoader(
-        dataset=val_set, batch_size=512, shuffle=False)
+        dataset=val_set, batch_size=8, shuffle=False)
     test_loader = Data.DataLoader(
-        dataset=test_set, batch_size=512, shuffle=False)
+        dataset=test_set, batch_size=8, shuffle=False)
 
 
-    model = ClassificationBert(n_labels).cuda()
+    model = ClassificationBert(n_labels)
+    model = model.cuda() if use_cuda else model
     model = nn.DataParallel(model)
     optimizer = AdamW(
         [
@@ -120,7 +121,8 @@ def validate(valloader, model, criterion, epoch, mode):
         correct = 0
 
         for batch_idx, (inputs, targets, length) in enumerate(valloader):
-            inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
+            if use_cuda:
+                inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
 
@@ -141,7 +143,8 @@ def train(labeled_trainloader, model, optimizer, criterion, epoch):
     model.train()
 
     for batch_idx, (inputs, targets, length) in enumerate(labeled_trainloader):
-        inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
+        if use_cuda:
+            inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
         outputs = model(inputs)
         loss = criterion(outputs, targets)
 
