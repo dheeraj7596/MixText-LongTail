@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as Data
-from pytorch_transformers import *
+from transformers import *
 from torch.autograd import Variable
 from torch.utils.data import Dataset
 
@@ -104,12 +104,14 @@ def main():
     unlabeled_trainloader = Data.DataLoader(
         dataset=train_unlabeled_set, batch_size=args.batch_size_u, shuffle=True)
     val_loader = Data.DataLoader(
-        dataset=val_set, batch_size=512, shuffle=False)
+        dataset=val_set, batch_size=8, shuffle=False)
     test_loader = Data.DataLoader(
-        dataset=test_set, batch_size=512, shuffle=False)
+        dataset=test_set, batch_size=8, shuffle=False)
 
     # Define the model, set the optimizer
-    model = MixText(n_labels, args.mix_option).cuda()
+    model = MixText(n_labels, args.mix_option)
+    if use_cuda:
+        model = model.cuda()
     model = nn.DataParallel(model)
     optimizer = AdamW(
         [
@@ -213,10 +215,11 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         targets_x = torch.zeros(batch_size, n_labels).scatter_(
             1, targets_x.view(-1, 1), 1)
 
-        inputs_x, targets_x = inputs_x.cuda(), targets_x.cuda(non_blocking=True)
-        inputs_u = inputs_u.cuda()
-        inputs_u2 = inputs_u2.cuda()
-        inputs_ori = inputs_ori.cuda()
+        if use_cuda:
+            inputs_x, targets_x = inputs_x.cuda(), targets_x.cuda(non_blocking=True)
+            inputs_u = inputs_u.cuda()
+            inputs_u2 = inputs_u2.cuda()
+            inputs_ori = inputs_ori.cuda()
 
         mask = []
 

@@ -17,7 +17,7 @@ from normal_bert import ClassificationBert
 
 parser = argparse.ArgumentParser(description='PyTorch Base Models')
 
-parser.add_argument('--epochs', default=2, type=int, metavar='N',
+parser.add_argument('--epochs', default=50, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--batch-size', default=4, type=int, metavar='N',
                     help='train batchsize')
@@ -47,7 +47,7 @@ parser.add_argument('--train_aug', default=False, type=bool, metavar='N',
 parser.add_argument('--model', type=str, default='bert-base-uncased',
                     help='pretrained model')
 
-parser.add_argument('--data-path', type=str, default='/Users/pushkar_bhuse/MixText/MixText-LongTail/data/yahoo_answers_csv/',
+parser.add_argument('--data-path', type=str, default='yahoo_answers_csv/',
                     help='path to data folders')
 
 
