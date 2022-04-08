@@ -43,7 +43,7 @@ class BertModel4Mix(BertPreTrainedModel):
         extended_attention_mask = attention_mask.unsqueeze(1).unsqueeze(2)
 
         extended_attention_mask = extended_attention_mask.to(
-            dtype=next(self.parameters()).dtype)  # fp16 compatibility
+            dtype=torch.float32)  # fp16 compatibility
         extended_attention_mask = (1.0 - extended_attention_mask) * -10000.0
 
         if input_ids2 is not None:
@@ -52,7 +52,7 @@ class BertModel4Mix(BertPreTrainedModel):
                 1).unsqueeze(2)
 
             extended_attention_mask2 = extended_attention_mask2.to(
-                dtype=next(self.parameters()).dtype)  # fp16 compatibility
+                dtype=torch.float32)  # fp16 compatibility
             extended_attention_mask2 = (
                 1.0 - extended_attention_mask2) * -10000.0
 
@@ -66,7 +66,7 @@ class BertModel4Mix(BertPreTrainedModel):
                 # We can specify head_mask for each layer
                 head_mask = head_mask.unsqueeze(1).unsqueeze(-1).unsqueeze(-1)
             # switch to fload if need + fp16 compatibility
-            head_mask = head_mask.to(dtype=next(self.parameters()).dtype)
+            head_mask = head_mask.to(dtype=torch.float32)
         else:
             head_mask = [None] * self.config.num_hidden_layers
 
