@@ -14,6 +14,7 @@ from torch.utils.data import Dataset
 
 from read_data import *
 from mixtext import MixText
+import gc
 
 
 parser = argparse.ArgumentParser(description='PyTorch MixText')
@@ -107,6 +108,8 @@ def main():
         dataset=val_set, batch_size=8, shuffle=False)
     test_loader = Data.DataLoader(
         dataset=test_set, batch_size=8, shuffle=False)
+    
+    gc.collect()
 
     # Define the model, set the optimizer
     model = MixText(n_labels, args.mix_option)
@@ -141,10 +144,14 @@ def main():
         # _, train_acc = validate(labeled_trainloader,
         #                        model,  criterion, epoch, mode='Train Stats')
         #print("epoch {}, train acc {}".format(epoch, train_acc))
+        
+        gc.collect()
 
         val_loss, val_acc = validate(
             val_loader, model, criterion, epoch, mode='Valid Stats')
 
+        gc.collect()
+        
         print("epoch {}, val acc {}, val_loss {}".format(
             epoch, val_acc, val_loss))
 
