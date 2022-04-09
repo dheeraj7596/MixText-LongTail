@@ -151,7 +151,7 @@ def main():
             val_loader, model, criterion, epoch, mode='Valid Stats')
 
         gc.collect()
-        
+
         print("epoch {}, val acc {}, val_loss {}".format(
             epoch, val_acc, val_loss))
 
@@ -369,7 +369,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         optimizer.step()
         # scheduler.step()
 
-        if batch_idx % 1000 == 0:
+        if batch_idx % 10 == 0:
             print("epoch {}, step {}, loss {}, Lx {}, Lu {}, Lu2 {}".format(
                 epoch, batch_idx, loss.item(), Lx.item(), Lu.item(), Lu2.item()))
 
@@ -389,7 +389,7 @@ def validate(valloader, model, criterion, epoch, mode):
 
             _, predicted = torch.max(outputs.data, 1)
 
-            if batch_idx == 0:
+            if batch_idx % 10:
                 print("Sample some true labeles and predicted labels")
                 print(predicted[:20])
                 print(targets[:20])
