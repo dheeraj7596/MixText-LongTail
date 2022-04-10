@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from transformers import *
+from transformers_dir import *
 import torch.utils.data as Data
 import pickle
 
