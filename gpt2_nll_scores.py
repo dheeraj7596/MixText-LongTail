@@ -453,7 +453,7 @@ def main():
             outputs = model(**batch)
 
         loss = outputs.loss
-        log_likelihood.append(-loss.item())
+        log_likelihood.append(loss.item())
 
     if args.output_dir is not None:
         pickle.dump(log_likelihood, open(os.path.join(args.output_dir, "log_likelihood.pkl"), "wb"))
