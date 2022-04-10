@@ -10,10 +10,11 @@ import torch.nn.functional as F
 import torch.utils.data as Data
 from transformers import *
 from torch.autograd import Variable
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, WeightedRandomSampler
 
 from read_data import *
 from mixtext import MixText
+from sklearn.feature_extraction.text import TfidfVectorizer
 import gc
 
 
@@ -102,8 +103,12 @@ def main():
         args.data_path, args.n_labeled, args.un_labeled, model=args.model, train_aug=args.train_aug)
     labeled_trainloader = Data.DataLoader(
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
+    
+    tf_idf_sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
+    
     unlabeled_trainloader = Data.DataLoader(
-        dataset=train_unlabeled_set, batch_size=args.batch_size_u, shuffle=True)
+        dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = tf_idf_sampler)
+
     val_loader = Data.DataLoader(
         dataset=val_set, batch_size=8, shuffle=False)
     test_loader = Data.DataLoader(
@@ -178,6 +183,16 @@ def main():
     print('Test acc:')
     print(test_accs)
 
+def get_tfidf_sampler(labelled, unlabelled):
+    tfidfvectorizer = TfidfVectorizer(analyzer='word',stop_words= 'english')
+    tfidf_wm = tfidfvectorizer.fit_transform(labelled)
+
+    unlabelled_tfidf = tfidfvectorizer.transform(unlabelled)
+
+    mean_vals = np.mean(unlabelled_tfidf.toarray(), axis = 1)
+    sampler = WeightedRandomSampler(mean_vals, 10000, replacement=True)
+
+    return sampler
 
 def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False):
     labeled_train_iter = iter(labeled_trainloader)
