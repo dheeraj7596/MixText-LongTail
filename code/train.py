@@ -16,6 +16,8 @@ from read_data import *
 from mixtext import MixText
 from sklearn.feature_extraction.text import TfidfVectorizer
 import gc
+from scipy.special import softmax
+
 
 
 parser = argparse.ArgumentParser(description='PyTorch MixText')
@@ -189,7 +191,7 @@ def get_tfidf_sampler(labelled, unlabelled):
 
     unlabelled_tfidf = tfidfvectorizer.transform(unlabelled)
 
-    mean_vals = np.mean(unlabelled_tfidf.toarray(), axis = 1)
+    mean_vals = softmax(np.negative(np.mean(unlabelled_tfidf.toarray(), axis = 1)))
     sampler = WeightedRandomSampler(mean_vals, len(unlabelled), replacement=True)
 
     return sampler
