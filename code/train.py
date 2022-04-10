@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.utils.data as Data
-from transformers import *
+from transformers_dir import *
 from torch.autograd import Variable
 from torch.utils.data import Dataset, WeightedRandomSampler
 
@@ -190,7 +190,7 @@ def get_tfidf_sampler(labelled, unlabelled):
     unlabelled_tfidf = tfidfvectorizer.transform(unlabelled)
 
     mean_vals = np.mean(unlabelled_tfidf.toarray(), axis = 1)
-    sampler = WeightedRandomSampler(mean_vals, 10000, replacement=True)
+    sampler = WeightedRandomSampler(mean_vals, len(unlabelled), replacement=True)
 
     return sampler
 
