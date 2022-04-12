@@ -17,6 +17,7 @@ from mixtext import MixText
 from sklearn.feature_extraction.text import TfidfVectorizer
 import gc
 from scipy.special import softmax
+from sklearn.metrics import f1_score,classification_report
 
 
 
@@ -154,7 +155,7 @@ def main():
         
         gc.collect()
 
-        val_loss, val_acc = validate(
+        val_loss, val_acc, _, _ = validate(
             val_loader, model, criterion, epoch, mode='Valid Stats')
 
         gc.collect()
@@ -164,11 +165,18 @@ def main():
 
         if val_acc >= best_acc:
             best_acc = val_acc
-            test_loss, test_acc = validate(
+            test_loss, test_acc, predicted, true = validate(
                 test_loader, model, criterion, epoch, mode='Test Stats ')
             test_accs.append(test_acc)
+
             print("epoch {}, test acc {},test loss {}".format(
                 epoch, test_acc, test_loss))
+
+            f1score = f1_score(true, predicted, average="micro")
+            class_report = classification_report(true, predicted)
+
+            print("Micro F1 Score: {}".format(f1score))
+            print(class_report)
 
         print('Epoch: ', epoch)
 
@@ -399,12 +407,18 @@ def validate(valloader, model, criterion, epoch, mode):
         acc_total = 0
         correct = 0
 
+        all_predicted = np.array([])
+        all_true = np.array([])
+
         for batch_idx, (inputs, targets, length) in enumerate(valloader):
             inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
             outputs = model(inputs)
             loss = criterion(outputs, targets)
 
             _, predicted = torch.max(outputs.data, 1)
+
+            all_predicted = np.append(all_predicted, np.array(predicted.cpu()))
+            all_true = np.append(all_true, np.array(targets.cpu()))
 
             if batch_idx % 10:
                 print("Sample some true labeles and predicted labels")
@@ -419,7 +433,7 @@ def validate(valloader, model, criterion, epoch, mode):
         acc_total = correct/total_sample
         loss_total = loss_total/total_sample
 
-    return loss_total, acc_total
+    return loss_total, acc_total, all_predicted, all_true
 
 
 def linear_rampup(current, rampup_length=args.epochs):
