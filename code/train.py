@@ -19,6 +19,8 @@ import gc
 from scipy.special import softmax
 from sklearn.metrics import f1_score,classification_report
 
+import pickle
+
 
 
 parser = argparse.ArgumentParser(description='PyTorch MixText')
@@ -63,7 +65,7 @@ parser.add_argument('--train_aug', default=False, type=bool, metavar='N',
 parser.add_argument('--model', type=str, default='bert-base-uncased',
                     help='pretrained model')
 
-parser.add_argument('--data-path', type=str, default='yahoo_answers_csv/',
+parser.add_argument('--data-path', type=str, default='/Users/pushkar_bhuse/MixText/MixText-LongTail/data/yahoo_answers_csv/',
                     help='path to data folders')
 
 parser.add_argument('--mix-layers-set', nargs='+',
@@ -83,6 +85,8 @@ parser.add_argument('--margin', default=0.7, type=float, metavar='N',
                     help='margin for hinge loss')
 parser.add_argument('--lambda-u-hinge', default=0, type=float,
                     help='weight for hinge loss term of unlabeled data')
+parser.add_argument('--nll_preprocessed', default=True, type=bool,
+                    help='boolean to indicate if GPT-2 is used for calculating longtailedness')
 
 args = parser.parse_args()
 
@@ -103,14 +107,20 @@ def main():
     global best_acc
     # Read dataset and build dataloaders
     train_labeled_set, train_unlabeled_set, val_set, test_set, n_labels = get_data(
-        args.data_path, args.n_labeled, args.un_labeled, model=args.model, train_aug=args.train_aug)
+        args.data_path, args.n_labeled, args.un_labeled, model=args.model, train_aug=args.train_aug, nll = args.nll_preprocessed)
+    
+    
     labeled_trainloader = Data.DataLoader(
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
     
-    tf_idf_sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
+    if args.nll_preprocessed:
+        sampler = get_nll_sampler()
+    else:
+        sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
+
     
     unlabeled_trainloader = Data.DataLoader(
-        dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = tf_idf_sampler)
+        dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = sampler)
 
     val_loader = Data.DataLoader(
         dataset=val_set, batch_size=8, shuffle=False)
@@ -192,6 +202,11 @@ def main():
 
     print('Test acc:')
     print(test_accs)
+
+def get_nll_sampler():
+    with open(args.data_path+'log_likelihood.pkl', 'rb') as f:
+        nll_scores = np.array(pickle.load(f))
+    return nll_scores
 
 def get_tfidf_sampler(labelled, unlabelled):
     tfidfvectorizer = TfidfVectorizer(analyzer='word',stop_words= 'english')
