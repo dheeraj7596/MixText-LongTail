@@ -53,16 +53,17 @@ def get_data(data_path, n_labeled_per_class, unlabeled_per_class=5000, max_seq_l
 
     if nll:
         train_df = pd.read_csv(data_path+'train_data_gpt.csv')
-        train_labels = np.array([v-1 for v in train_df["labels"]])
-        train_text = np.array([v for v in train_df["text"]])
+        train_labels = train_df["labels"].to_numpy()
+        train_text = train_df["text"].to_numpy()
 
         unlabelled_df = pd.read_csv(data_path+'unlabelled_data_gpt.csv')
-        unlabelled_idx = np.array([v-1 for v in unlabelled_df["labels"]])
-        unlabelled_text = np.array([v for v in unlabelled_df["text"]])
+        unlabelled_idx = unlabelled_df["labels"].to_numpy()
+        # unlabelled_idx = unlabelled_df.index.values
+        unlabelled_text = unlabelled_df["text"].to_numpy()
 
         val_df = pd.read_csv(data_path+'val_data_gpt.csv')
-        val_labels = np.array([v-1 for v in val_df["labels"]])
-        val_text = np.array([v for v in val_df["text"]])
+        val_labels = val_df["labels"].to_numpy()
+        val_text = val_df["text"].to_numpy()
 
         train_labeled_dataset = loader_labeled(
             train_text, train_labels, tokenizer, max_seq_len, train_aug)
