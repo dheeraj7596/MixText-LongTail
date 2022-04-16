@@ -114,7 +114,7 @@ def main():
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
     
     if args.nll_preprocessed:
-        sampler = get_nll_sampler()
+        sampler = get_nll_sampler(train_unlabeled_set.text)
     else:
         sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
 
@@ -203,10 +203,11 @@ def main():
     print('Test acc:')
     print(test_accs)
 
-def get_nll_sampler():
+def get_nll_sampler(unlabelled):
     with open(args.data_path+'log_likelihood.pkl', 'rb') as f:
         nll_scores = np.array(pickle.load(f))
-    return nll_scores
+    sampler = WeightedRandomSampler(nll_scores, len(unlabelled), replacement=True)
+    return sampler
 
 def get_tfidf_sampler(labelled, unlabelled):
     tfidfvectorizer = TfidfVectorizer(analyzer='word',stop_words= 'english')
