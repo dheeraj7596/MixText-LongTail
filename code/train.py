@@ -192,9 +192,11 @@ def main():
                 epoch, test_acc, test_loss))
 
             f1score = f1_score(true, predicted, average="micro")
+            f1score = f1_score(true, predicted, average="macro")
             class_report = classification_report(true, predicted)
 
             print("Micro F1 Score: {}".format(f1score))
+            print("Macro F1 Score: {}".format(f1score))
             print(class_report)
 
         print('Epoch: ', epoch)
@@ -231,7 +233,7 @@ def get_tfidf_sampler(labelled, unlabelled):
 
     return sampler
 
-def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False, logger):
+def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False):
     labeled_train_iter = iter(labeled_trainloader)
     unlabeled_train_iter = iter(unlabeled_trainloader)
     model.train()
@@ -426,7 +428,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         optimizer.step()
         # scheduler.step()
 
-        if batch_idx % 10 == 0:
+        if batch_idx % 1000 == 0:
             print("epoch {}, step {}, loss {}, Lx {}, Lu {}, Lu2 {}".format(
                 epoch, batch_idx, loss.item(), Lx.item(), Lu.item(), Lu2.item()))
 
@@ -454,7 +456,7 @@ def validate(valloader, model, criterion, epoch, mode):
             all_predicted = np.append(all_predicted, np.array(predicted.cpu()))
             all_true = np.append(all_true, np.array(targets.cpu()))
 
-            if batch_idx % 10:
+            if batch_idx == 0:
                 print("Sample some true labeles and predicted labels")
                 print(predicted[:20])
                 print(targets[:20])
