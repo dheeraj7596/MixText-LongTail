@@ -87,6 +87,8 @@ parser.add_argument('--lambda-u-hinge', default=0, type=float,
                     help='weight for hinge loss term of unlabeled data')
 parser.add_argument('--nll_preprocessed', default=True, type=bool,
                     help='boolean to indicate if GPT-2 is used for calculating longtailedness')
+parser.add_argument('--long_tailed', default=False, type=bool,
+                    help='boolean to indicate if Long-Tailedness should be computed')
 
 args = parser.parse_args()
 
@@ -112,15 +114,20 @@ def main():
     
     labeled_trainloader = Data.DataLoader(
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
-    
-    if args.nll_preprocessed:
-        sampler = get_nll_sampler(train_unlabeled_set.text)
-    else:
-        sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
 
+    if args.long_tailed:
     
-    unlabeled_trainloader = Data.DataLoader(
-        dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = sampler)
+        if args.nll_preprocessed:
+            sampler = get_nll_sampler(train_unlabeled_set.text)
+        else:
+            sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
+
+        unlabeled_trainloader = Data.DataLoader(
+            dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = sampler)
+
+    else:
+        unlabeled_trainloader = Data.DataLoader(
+            dataset=train_unlabeled_set, batch_size=args.batch_size_u, shuffle = True)
 
     val_loader = Data.DataLoader(
         dataset=val_set, batch_size=8, shuffle=False)
@@ -139,7 +146,7 @@ def main():
             {"params": model.module.bert.parameters(), "lr": args.lrmain},
             {"params": model.module.linear.parameters(), "lr": args.lrlast},
         ])
-
+    logger = pd.DataFrame({"label": []})
     num_warmup_steps = math.floor(50)
     num_total_steps = args.val_iteration
 
@@ -154,8 +161,10 @@ def main():
     # Start training
     for epoch in range(args.epochs):
 
-        train(labeled_trainloader, unlabeled_trainloader, model, optimizer,
+        temp_data = train(labeled_trainloader, unlabeled_trainloader, model, optimizer,
               scheduler, train_criterion, epoch, n_labels, args.train_aug)
+
+        logger = logger.append(temp_data, ignore_index=True)
 
         # scheduler.step()
 
@@ -203,6 +212,8 @@ def main():
     print('Test acc:')
     print(test_accs)
 
+    logger.to_csv("train_dist_log_nll.csv")
+
 def get_nll_sampler(unlabelled):
     with open(args.data_path+'log_likelihood.pkl', 'rb') as f:
         nll_scores = np.array(pickle.load(f))
@@ -220,7 +231,7 @@ def get_tfidf_sampler(labelled, unlabelled):
 
     return sampler
 
-def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False):
+def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False, logger):
     labeled_train_iter = iter(labeled_trainloader)
     unlabeled_train_iter = iter(unlabeled_trainloader)
     model.train()
@@ -231,6 +242,8 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         print('Change T!')
         args.T = 0.9
         flag = 1
+    
+    temp_logger = pd.DataFrame({"label": []})
 
     for batch_idx in range(args.val_iteration):
 
@@ -288,6 +301,9 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
             pt = p**(1/args.T)
             targets_u = pt / pt.sum(dim=1, keepdim=True)
             targets_u = targets_u.detach()
+
+        hard_targets = pd.DataFrame({"label" : torch.argmax(targets_u, dim=1).numpy()})
+        temp_logger = temp_logger.append(hard_targets, ignore_index=True)
 
         mixed = 1
 
@@ -413,6 +429,8 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         if batch_idx % 10 == 0:
             print("epoch {}, step {}, loss {}, Lx {}, Lu {}, Lu2 {}".format(
                 epoch, batch_idx, loss.item(), Lx.item(), Lu.item(), Lu2.item()))
+
+    return temp_logger
 
 
 def validate(valloader, model, criterion, epoch, mode):
