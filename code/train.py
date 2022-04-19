@@ -231,7 +231,7 @@ def get_tfidf_sampler(labelled, unlabelled):
 
     return sampler
 
-def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False, logger):
+def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False):
     labeled_train_iter = iter(labeled_trainloader)
     unlabeled_train_iter = iter(unlabeled_trainloader)
     model.train()
@@ -302,7 +302,7 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
             targets_u = pt / pt.sum(dim=1, keepdim=True)
             targets_u = targets_u.detach()
 
-        hard_targets = pd.DataFrame({"label" : torch.argmax(targets_u, dim=1).numpy()})
+        hard_targets = pd.DataFrame({"label" : torch.argmax(targets_u, dim=1).cpu().numpy()})
         temp_logger = temp_logger.append(hard_targets, ignore_index=True)
 
         mixed = 1
