@@ -1,3 +1,4 @@
+
 import argparse
 import os
 import random
@@ -10,18 +11,11 @@ import torch.nn.functional as F
 import torch.utils.data as Data
 from transformers_dir import *
 from torch.autograd import Variable
-from torch.utils.data import Dataset, WeightedRandomSampler
+from torch.utils.data import Dataset
 
-from read_data import *
+from og_read_data import *
 from mixtext import MixText
-from sklearn.feature_extraction.text import TfidfVectorizer
-import gc
-from scipy.special import softmax
 from sklearn.metrics import f1_score,classification_report
-
-import pickle
-
-
 
 parser = argparse.ArgumentParser(description='PyTorch MixText')
 
@@ -65,7 +59,7 @@ parser.add_argument('--train_aug', default=False, type=bool, metavar='N',
 parser.add_argument('--model', type=str, default='bert-base-uncased',
                     help='pretrained model')
 
-parser.add_argument('--data-path', type=str, default='/Users/pushkar_bhuse/MixText/MixText-LongTail/data/yahoo_answers_csv/',
+parser.add_argument('--data-path', type=str, default='yahoo_answers_csv/',
                     help='path to data folders')
 
 parser.add_argument('--mix-layers-set', nargs='+',
@@ -85,10 +79,6 @@ parser.add_argument('--margin', default=0.7, type=float, metavar='N',
                     help='margin for hinge loss')
 parser.add_argument('--lambda-u-hinge', default=0, type=float,
                     help='weight for hinge loss term of unlabeled data')
-parser.add_argument('--nll_preprocessed', default = False, type=bool,
-                    help='boolean to indicate if GPT-2 is used for calculating longtailedness')
-parser.add_argument('--long_tailed', default = False, type=bool,
-                    help='boolean to indicate if Long-Tailedness should be computed')
 
 args = parser.parse_args()
 
@@ -108,51 +98,30 @@ print("Mix layers sets: ", args.mix_layers_set)
 def main():
     global best_acc
     # Read dataset and build dataloaders
-    print("In MAIN {}".format(args.long_tailed))
     train_labeled_set, train_unlabeled_set, val_set, test_set, n_labels = get_data(
-        args.data_path, args.n_labeled,  args.nll_preprocessed, args.un_labeled, model=args.model, train_aug=args.train_aug)
-    
-    
+        args.data_path, args.n_labeled, args.un_labeled, model=args.model, train_aug=args.train_aug)
     labeled_trainloader = Data.DataLoader(
         dataset=train_labeled_set, batch_size=args.batch_size, shuffle=True)
-
-    if args.long_tailed:
-
-        print("IN Here")
-    
-        if args.nll_preprocessed:
-            sampler = get_nll_sampler(train_unlabeled_set.text)
-        else:
-            sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
-
-        print("sampler created")
-        unlabeled_trainloader = Data.DataLoader(
-            dataset=train_unlabeled_set, batch_size=args.batch_size_u, sampler = sampler)
-
-    else:
-        unlabeled_trainloader = Data.DataLoader(
-            dataset=train_unlabeled_set, batch_size=args.batch_size_u, shuffle = True)
-
+    unlabeled_trainloader = Data.DataLoader(
+        dataset=train_unlabeled_set, batch_size=args.batch_size_u, shuffle=True)
     val_loader = Data.DataLoader(
-        dataset=val_set, batch_size=8, shuffle=False)
+        dataset=val_set, batch_size=512, shuffle=False)
     test_loader = Data.DataLoader(
-        dataset=test_set, batch_size=8, shuffle=False)
-    
-    gc.collect()
+        dataset=test_set, batch_size=512, shuffle=False)
 
     # Define the model, set the optimizer
-    model = MixText(n_labels, args.mix_option)
-    if use_cuda:
-        model = model.cuda()
+    model = MixText(n_labels, args.mix_option).cuda()
     model = nn.DataParallel(model)
     optimizer = AdamW(
         [
             {"params": model.module.bert.parameters(), "lr": args.lrmain},
             {"params": model.module.linear.parameters(), "lr": args.lrlast},
         ])
-    logger = pd.DataFrame({"label": []})
+
     num_warmup_steps = math.floor(50)
     num_total_steps = args.val_iteration
+    logger = pd.DataFrame({"label": []})
+
 
     scheduler = None
     #WarmupConstantSchedule(optimizer, warmup_steps=num_warmup_steps)
@@ -175,13 +144,9 @@ def main():
         # _, train_acc = validate(labeled_trainloader,
         #                        model,  criterion, epoch, mode='Train Stats')
         #print("epoch {}, train acc {}".format(epoch, train_acc))
-        
-        gc.collect()
 
         val_loss, val_acc, _, _ = validate(
             val_loader, model, criterion, epoch, mode='Valid Stats')
-
-        gc.collect()
 
         print("epoch {}, val acc {}, val_loss {}".format(
             epoch, val_acc, val_loss))
@@ -191,16 +156,13 @@ def main():
             test_loss, test_acc, predicted, true = validate(
                 test_loader, model, criterion, epoch, mode='Test Stats ')
             test_accs.append(test_acc)
-
             print("epoch {}, test acc {},test loss {}".format(
                 epoch, test_acc, test_loss))
 
-            f1score = f1_score(true, predicted, average="micro")
-            f1score = f1_score(true, predicted, average="macro")
+            print("Micro F1: {}".format(f1_score(true, predicted, average='micro')))
+            print("Macro F1: {}".format(f1_score(true, predicted, average='macro')))
+                    
             class_report = classification_report(true, predicted)
-
-            print("Micro F1 Score: {}".format(f1score))
-            print("Macro F1 Score: {}".format(f1score))
             print(class_report)
 
         print('Epoch: ', epoch)
@@ -217,26 +179,8 @@ def main():
 
     print('Test acc:')
     print(test_accs)
+    logger.to_csv("train_dist_log_og.csv")
 
-    logger.to_csv("train_dist_log_nll.csv")
-
-def get_nll_sampler(unlabelled):
-    with open(args.data_path+'log_likelihood.pkl', 'rb') as f:
-        nll_scores = np.array(pickle.load(f)) 
-        print("NLL Scores: {}".format(nll_scores.shape))
-    sampler = WeightedRandomSampler(nll_scores, len(unlabelled), replacement=True)
-    return sampler
-
-def get_tfidf_sampler(labelled, unlabelled):
-    tfidfvectorizer = TfidfVectorizer(analyzer='word',stop_words= 'english')
-    tfidf_wm = tfidfvectorizer.fit_transform(np.append(labelled, unlabelled, axis=0))
-
-    unlabelled_tfidf = tfidfvectorizer.transform(unlabelled)
-
-    mean_vals = softmax(np.negative(np.mean(unlabelled_tfidf.toarray(), axis = 1)))
-    sampler = WeightedRandomSampler(mean_vals, len(unlabelled), replacement=True)
-
-    return sampler
 
 def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, scheduler, criterion, epoch, n_labels, train_aug=False):
     labeled_train_iter = iter(labeled_trainloader)
@@ -253,8 +197,9 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
     temp_logger = pd.DataFrame({"label": []})
 
     for batch_idx in range(args.val_iteration):
-
+        
         total_steps += 1
+
         if not train_aug:
             try:
                 inputs_x, targets_x, inputs_x_length = labeled_train_iter.next()
@@ -282,11 +227,10 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
         targets_x = torch.zeros(batch_size, n_labels).scatter_(
             1, targets_x.view(-1, 1), 1)
 
-        if use_cuda:
-            inputs_x, targets_x = inputs_x.cuda(), targets_x.cuda(non_blocking=True)
-            inputs_u = inputs_u.cuda()
-            inputs_u2 = inputs_u2.cuda()
-            inputs_ori = inputs_ori.cuda()
+        inputs_x, targets_x = inputs_x.cuda(), targets_x.cuda(non_blocking=True)
+        inputs_u = inputs_u.cuda()
+        inputs_u2 = inputs_u2.cuda()
+        inputs_ori = inputs_ori.cuda()
 
         mask = []
 
@@ -308,15 +252,15 @@ def train(labeled_trainloader, unlabeled_trainloader, model, optimizer, schedule
             targets_u = pt / pt.sum(dim=1, keepdim=True)
             targets_u = targets_u.detach()
 
+        mixed = 1
         hard_targets = pd.DataFrame({"label" : torch.argmax(targets_u, dim=1).cpu().numpy()})
         temp_logger = temp_logger.append(hard_targets, ignore_index=True)
-
-        mixed = 1
 
         if args.co:
             mix_ = np.random.choice([0, 1], 1)[0]
         else:
             mix_ = 1
+
 
         if mix_ == 1:
             l = np.random.beta(args.alpha, args.alpha)
@@ -446,7 +390,7 @@ def validate(valloader, model, criterion, epoch, mode):
         total_sample = 0
         acc_total = 0
         correct = 0
-
+        
         all_predicted = np.array([])
         all_true = np.array([])
 
@@ -474,6 +418,7 @@ def validate(valloader, model, criterion, epoch, mode):
         loss_total = loss_total/total_sample
 
     return loss_total, acc_total, all_predicted, all_true
+
 
 
 def linear_rampup(current, rampup_length=args.epochs):
@@ -530,5 +475,3 @@ class SemiLoss(object):
 
 if __name__ == '__main__':
     main()
-import argparse
-import os
