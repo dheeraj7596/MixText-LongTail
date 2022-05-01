@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import torch
 from torch.utils.data import Dataset
-from transformers_dir import *
+from transformers import *
 import torch.utils.data as Data
 import pickle
 
@@ -24,102 +24,61 @@ class Translator:
         out2 = self.ru[idx]
         return out1, out2, ori
 
-def get_data(data_path, n_labeled_per_class, nll, unlabeled_per_class=5000, max_seq_len=256, model='bert-base-uncased', train_aug=False):
+def get_data(data_path, n_labeled_per_class, unlabeled_per_class=5000, max_seq_len=256, model='bert-base-uncased', train_aug=False):
     """Read data, split the dataset, and build dataset for dataloaders.
-
     Arguments:
         data_path {str} -- Path to your dataset folder: contain a train.csv and test.csv
         n_labeled_per_class {int} -- Number of labeled data per class
-
     Keyword Arguments:
         unlabeled_per_class {int} -- Number of unlabeled data per class (default: {5000})
         max_seq_len {int} -- Maximum sequence length (default: {256})
         model {str} -- Model name (default: {'bert-base-uncased'})
         train_aug {bool} -- Whether performing augmentation on labeled training set (default: {False})
-
     """
-
     # Load the tokenizer for bert
     tokenizer = BertTokenizer.from_pretrained(model)
 
+    train_df = pd.read_csv(data_path+'train.csv', header=None)
     test_df = pd.read_csv(data_path+'test.csv', header=None)
+
+    # Here we only use the bodies and removed titles to do the classifications
+    train_labels = np.array([v-1 for v in train_df[0]])
+    train_text = np.array([v for v in train_df[2]])
+
     test_labels = np.array([u-1 for u in test_df[0]])
     test_text = np.array([v for v in test_df[2]])
 
+    n_labels = max(test_labels) + 1
+
+    # Split the labeled training set, unlabeled training set, development set
+    train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(
+        train_labels, n_labeled_per_class, unlabeled_per_class, n_labels)
+
+    # Build the dataset class for each set
+    train_labeled_dataset = loader_labeled(
+        train_text[train_labeled_idxs], train_labels[train_labeled_idxs], tokenizer, max_seq_len, train_aug)
+    train_unlabeled_dataset = loader_unlabeled(
+        train_text[train_unlabeled_idxs], train_unlabeled_idxs, tokenizer, max_seq_len, Translator(data_path))
+    val_dataset = loader_labeled(
+        train_text[val_idxs], train_labels[val_idxs], tokenizer, max_seq_len)
     test_dataset = loader_labeled(
         test_text, test_labels, tokenizer, max_seq_len)
 
-    n_labels = max(test_labels) + 1
-
-    print("IN Read DATA {}".format(nll))
-
-    if nll is True:
-
-        print("Using Existing Data Split")
-
-        train_df = pd.read_csv(data_path+'train_data_gpt_2-2.csv')
-        train_labels = train_df["labels"].to_numpy()
-        train_text = train_df["text"].to_numpy()
-
-        unlabelled_df = pd.read_csv(data_path+'unlabelled_data_gpt_2-2.csv')
-        unlabelled_idx = unlabelled_df["labels"].to_numpy()
-        # unlabelled_idx = unlabelled_df.index.values
-        unlabelled_text = unlabelled_df["text"].to_numpy()
-
-        val_df = pd.read_csv(data_path+'val_data_gpt_2-2.csv')
-        val_labels = val_df["labels"].to_numpy()
-        val_text = val_df["text"].to_numpy()
-
-        train_labeled_dataset = loader_labeled(
-            train_text, train_labels, tokenizer, max_seq_len, train_aug)
-        train_unlabeled_dataset = loader_unlabeled(
-            unlabelled_text, unlabelled_idx, tokenizer, max_seq_len, Translator(data_path))
-        val_dataset = loader_labeled(
-            val_text, val_labels, tokenizer, max_seq_len)
-
-        print("#Labeled: {}, Unlabeled {}, Val {}, Test {}".format(len(
-            train_df.to_numpy()), len(unlabelled_df.to_numpy()), len(val_df.to_numpy()), len(test_labels)))
-
-    else:
-
-        print("Performing New Data Split")
-
-        train_df = pd.read_csv(data_path+'train.csv', header=None)
-        
-        # Here we only use the bodies and removed titles to do the classifications
-        train_labels = np.array([v-1 for v in train_df[0]])
-        train_text = np.array([v for v in train_df[2]])
-
-        # Split the labeled training set, unlabeled training set, development set
-        train_labeled_idxs, train_unlabeled_idxs, val_idxs = train_val_split(
-            train_labels, n_labeled_per_class, unlabeled_per_class, n_labels)
-
-        # Build the dataset class for each set
-        train_labeled_dataset = loader_labeled(
-            train_text[train_labeled_idxs], train_labels[train_labeled_idxs], tokenizer, max_seq_len, train_aug)
-        train_unlabeled_dataset = loader_unlabeled(
-            train_text[train_unlabeled_idxs], train_unlabeled_idxs, tokenizer, max_seq_len, Translator(data_path))
-        val_dataset = loader_labeled(
-            train_text[val_idxs], train_labels[val_idxs], tokenizer, max_seq_len)
-
-        print("#Labeled: {}, Unlabeled {}, Val {}, Test {}".format(len(
-            train_labeled_idxs), len(train_unlabeled_idxs), len(val_idxs), len(test_labels)))
+    print("#Labeled: {}, Unlabeled {}, Val {}, Test {}".format(len(
+        train_labeled_idxs), len(train_unlabeled_idxs), len(val_idxs), len(test_labels)))
 
     return train_labeled_dataset, train_unlabeled_dataset, val_dataset, test_dataset, n_labels
 
 
 def train_val_split(labels, n_labeled_per_class, unlabeled_per_class, n_labels, seed=0):
     """Split the original training set into labeled training set, unlabeled training set, development set
-
     Arguments:
         labels {list} -- List of labeles for original training set
         n_labeled_per_class {int} -- Number of labeled data per class
         unlabeled_per_class {int} -- Number of unlabeled data per class
         n_labels {int} -- The number of classes
-
     Keyword Arguments:
         seed {int} -- [random seed of np.shuffle] (default: {0})
-
     Returns:
         [list] -- idx for labeled training set, unlabeled training set, development set
     """
