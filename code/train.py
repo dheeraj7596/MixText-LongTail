@@ -131,7 +131,7 @@ def main():
     elif args.long_tailed:
     
         if args.nll_preprocessed:
-            sampler = get_nll_sampler(train_unlabeled_set.text)
+            sampler = get_nll_sampler(train_unlabeled_set)
         else:
             sampler = get_tfidf_sampler(train_labeled_set.text, train_unlabeled_set.text)
 
@@ -235,12 +235,14 @@ def main():
     print(test_accs)
 
     logger.to_csv("train_dist_log_nll.csv")
-
 def get_nll_sampler(unlabelled):
     with open(args.data_path+'log_likelihood.pkl', 'rb') as f:
         nll_scores = np.array(pickle.load(f)) 
         print("NLL Scores: {}".format(nll_scores.shape))
-    sampler = WeightedRandomSampler(nll_scores, len(unlabelled), replacement=True)
+
+    text_len = unlabelled.get_seq_lengths()
+    normalized_nll = torch.div(nll_scores, text_len)
+    sampler = WeightedRandomSampler(normalized_nll, len(unlabelled.text), replacement=True)
     return sampler
 
 def get_nll_scores():

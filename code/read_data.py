@@ -57,16 +57,16 @@ def get_data(data_path, n_labeled_per_class, nll, unlabeled_per_class=5000, max_
 
         print("Using Existing Data Split")
 
-        train_df = pd.read_csv(data_path+'train_data_gpt_2-2.csv')
+        train_df = pd.read_csv(data_path+'train_data_gpt.csv')
         train_labels = train_df["labels"].to_numpy()
         train_text = train_df["text"].to_numpy()
 
-        unlabelled_df = pd.read_csv(data_path+'unlabelled_data_gpt_2-2.csv')
+        unlabelled_df = pd.read_csv(data_path+'unlabelled_data_gpt.csv')
         unlabelled_idx = unlabelled_df["labels"].to_numpy()
         # unlabelled_idx = unlabelled_df.index.values
         unlabelled_text = unlabelled_df["text"].to_numpy()
 
-        val_df = pd.read_csv(data_path+'val_data_gpt_2-2.csv')
+        val_df = pd.read_csv(data_path+'val_data_gpt`.csv')
         val_labels = val_df["labels"].to_numpy()
         val_text = val_df["text"].to_numpy()
 
@@ -229,6 +229,11 @@ class loader_unlabeled(Dataset):
 
     def __len__(self):
         return len(self.text)
+
+    def get_seq_lengths(self):
+        tokens = self.tokenizer.tokenize(self.text)
+        lengths = torch.tensor([len(seq) for seq in tokens])
+        return lengths
 
     def get_tokenized(self, text):
         tokens = self.tokenizer.tokenize(text)
