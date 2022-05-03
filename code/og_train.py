@@ -393,6 +393,7 @@ def validate(valloader, model, criterion, epoch, mode):
         
         all_predicted = np.array([])
         all_true = np.array([])
+        all_inputs = np.array([])
 
         for batch_idx, (inputs, targets, length) in enumerate(valloader):
             inputs, targets = inputs.cuda(), targets.cuda(non_blocking=True)
@@ -401,6 +402,7 @@ def validate(valloader, model, criterion, epoch, mode):
 
             _, predicted = torch.max(outputs.data, 1)
 
+            all_inputs = np.append(all_inputs, np.array(all_inputs.cpu()))
             all_predicted = np.append(all_predicted, np.array(predicted.cpu()))
             all_true = np.append(all_true, np.array(targets.cpu()))
 
@@ -417,7 +419,7 @@ def validate(valloader, model, criterion, epoch, mode):
         acc_total = correct/total_sample
         loss_total = loss_total/total_sample
 
-    return loss_total, acc_total, all_predicted, all_true
+    return loss_total, acc_total, all_predicted, all_true, all_inputs
 
 
 
